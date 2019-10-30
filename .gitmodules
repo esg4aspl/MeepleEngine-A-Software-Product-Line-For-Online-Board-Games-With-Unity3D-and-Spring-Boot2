@@ -1,0 +1,6 @@
+[submodule "meeple-core"]
+	path = meeple-core
+	url = https://gitlab.com/meeple-engine/meeple-core.git
+[submodule "meepleengine.com"]
+	path = meepleengine.com
+	url = https://gitlab.com/meeple-engine/meepleengine.com.git
