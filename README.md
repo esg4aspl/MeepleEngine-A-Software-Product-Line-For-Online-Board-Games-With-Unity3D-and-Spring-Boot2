@@ -1,5 +1,5 @@
 # MeepleEngine A Software Product Line For Online Board Games With Unity3D and Spring Boot2
-Open source engine for board games. https://gitlab.com/meeple-engine
+Open source engine for board games. https://gitlab.com/meeple-engine. This repository updated by GitlabCI. Please see Gitlab repos and CI files for more info.
 
 ## How To Clone
 ```
