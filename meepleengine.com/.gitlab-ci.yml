@@ -1,0 +1,16 @@
+
+github:
+  image: docker:git
+  stage: deploy
+  script:
+    - git config --global user.email "ahmetozdemirden@std.iyte.edu.tr"
+    - git config --global user.name "A. Semsettin Ozdemirden"
+    - git clone "https://${GITHUB_USERNAME_PASSWORD}github.com/esg4aspl/MeepleEngine-A-Software-Product-Line-For-Online-Board-Games-With-Unity3D-and-Spring-Boot2.git" meeple-github
+    - cd meeple-github
+    - git submodule update --init --recursive
+    - cd meepleengine.com
+    - git pull origin master
+    - cd ..
+    - git add .
+    - git commit -m "update meepleengine.com to $CI_COMMIT_SHORT_SHA, $CI_COMMIT_MESSAGE"
+    - git push origin master
