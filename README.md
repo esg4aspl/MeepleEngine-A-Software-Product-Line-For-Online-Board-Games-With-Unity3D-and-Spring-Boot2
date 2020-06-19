@@ -7,6 +7,9 @@ List of submodules.
 ### loadtest
 Artillery.io load test files.
 
+### meeple-client
+Unity3D client side.
+
 ### meeple-core
 Java Core Library.
 

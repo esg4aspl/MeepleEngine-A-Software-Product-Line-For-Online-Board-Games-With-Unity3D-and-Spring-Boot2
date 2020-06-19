@@ -1,0 +1,10 @@
+newmtl SquareCardTemplateFront
+map_Kd C:/UnityGamesC/Meeple Client/Assets/Templates/SquareCardTemplateFront.jpg
+Kd 1 1 1
+d 1
+
+newmtl SquareCardTemplateBack
+map_Kd C:/UnityGamesC/Meeple Client/Assets/Templates/SquareCardTemplateBack.jpg
+Kd 1 1 1
+d 1
+
