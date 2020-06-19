@@ -1,0 +1,131 @@
+{
+  "assets": [
+    {
+      "name": "WhitePiece",
+      "type": "Object3D",
+      "properties": {
+        "model": "url",
+        "texture": "url"
+      }
+    },
+    {
+      "name": "BlackPiece",
+      "type": "Object3D",
+      "properties": {
+        "model": "url",
+        "texture": "url"
+      }
+    },
+    {
+      "name": "MeepleBoard",
+      "type": "Plane",
+      "properties": {
+        "frontImage": "url",
+        "backImage": "url"
+      }
+    }
+  ],
+  "facts": {
+    "whitePiece1": {
+      "type": "Piece",
+      "asset": "WhitePiece",
+      "owner": "Player1",
+      "grid": {"x": 0, "y": 0},
+      "captured": false
+    },
+    "whitePiece2": {
+      "type": "Piece",
+      "asset": "WhitePiece",
+      "owner": "Player1",
+      "grid": {"x": 1, "y": 0},
+      "captured": false
+    },
+    "whitePiece3": {
+      "type": "Piece",
+      "asset": "WhitePiece",
+      "owner": "Player1",
+      "grid": {"x": 2, "y": 0},
+      "captured": false
+    },
+    "whitePiece4": {
+      "type": "Piece",
+      "asset": "WhitePiece",
+      "owner": "Player1",
+      "grid": {"x": 3, "y": 0},
+      "captured": false
+    },
+    "blackPiece1": {
+      "type": "Piece",
+      "asset": "BlackPiece",
+      "owner": "Player2",
+      "grid": {"x": 0, "y": 3},
+      "captured": false
+    },
+    "blackPiece2": {
+      "type": "Piece",
+      "asset": "BlackPiece",
+      "owner": "Player2",
+      "grid": {"x": 1, "y": 3},
+      "captured": false
+    },
+    "blackPiece3": {
+      "type": "Piece",
+      "asset": "BlackPiece",
+      "owner": "Player2",
+      "grid": {"x": 2, "y": 3},
+      "captured": false
+    },
+    "blackPiece4": {
+      "type": "Piece",
+      "asset": "BlackPiece",
+      "owner": "Player2",
+      "grid": {"x": 3, "y": 3},
+      "captured": false
+    },
+    "board": {
+      "type": "Board",
+      "asset": "MeepleBoard",
+      "size": {"x": 4, "y": 4}
+    }
+  },
+  "rules": {
+    "action": {
+      "when": [
+        {"type": "Piece"},
+        {"player": "$currentPlayer"},
+        {"captured": false}
+      ],
+      "then": {
+
+      }
+    },
+    "capture": {
+      "when": {
+
+      },
+      "then": {
+
+      }
+    }
+  },
+  "game": {
+    "name": "MeepleCheckers",
+    "description": "Meeple(Simple) version of checkers!",
+    "phases": [
+      {
+        "name": "GameLoop",
+        "stages": [
+          {
+            "name": "PlayPieceStage",
+            "description": "Player actions a piece in this stage.",
+            "action": [
+              {
+                "name": "actionPiece"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

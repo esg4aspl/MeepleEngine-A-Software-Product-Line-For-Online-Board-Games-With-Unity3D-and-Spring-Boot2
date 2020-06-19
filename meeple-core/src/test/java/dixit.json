@@ -1,0 +1,277 @@
+{
+  "assets": [
+    {
+      "name": "DixitCard1",
+      "class": "DixitCard",
+      "classProperties": {
+        "cardNumber": "1"
+      },
+      "view": "Plane",
+      "viewProperties": {
+        "frontImage": "url",
+        "backImage": "url"
+      }
+    },
+    {
+      "name": "VotingTokenRed1",
+      "class": "VotingToken",
+      "classProperties": {
+        "playerColor": "Red",
+        "tokenNumber": "1"
+      },
+      "view": "Object3D",
+      "viewProperties": {
+        "model": "url",
+        "texture": "url"
+      }
+    },
+    {
+      "name": "DrawPile",
+      "class": "Deck",
+      "classProperties": {},
+      "view": "Object3D",
+      "viewProperties": {
+        "frontImage": "url",
+        "backImage": "url",
+        "sideImage": "url"
+      }
+    },
+    {
+      "name": "MainBoard",
+      "class": "Board",
+      "classProperties": {
+        "grids": [
+          {
+            "name": "MainDrawPile"
+          },
+          {
+            "name": "CardArea1"
+          },
+          {
+            "name": "CardArea2"
+          },
+          {
+            "name": "CardArea3"
+          },
+          {
+            "name": "CardArea4"
+          },
+          {
+            "name": "TokenArea1"
+          },
+          {
+            "name": "TokenArea2"
+          },
+          {
+            "name": "TokenArea3"
+          },
+          {
+            "name": "TokenArea4"
+          }
+        ]
+      },
+      "view": "Plane",
+      "viewProperties": {
+        "frontImage": "url",
+        "backImage": "url"
+      }
+    }
+  ],
+  "players": [
+    {
+      "name": "PlayerRed",
+      "items": [
+        {
+          "type": "cardHand",
+          "items": []
+        },
+        "VotingTokenRed1",
+        "VotingTokenRed2",
+        "VotingTokenRed3",
+        "VotingTokenRed4"
+      ]
+    }
+  ],
+  "game": {
+    "name": "Dixit",
+    "description": "some description of dixit",
+    "phases": [
+      {
+        "name": "GameSetup",
+        "stages": [
+          {
+            "name": "GameSetupStage",
+            "description": "shuffle cards, deal each player 6 cards",
+            "actions" : [
+              {
+                "name": "ShuffleDrawPile",
+                "when": [],
+                "then": [
+                  {
+                    "assetName": "DrawPile",
+                    "do": "shuffle",
+                    "parameters": null
+                  }
+                ]
+              },
+              {
+                "name": "Deal6Cards",
+                "when": [],
+                "then": [
+                  {
+                    "assetName": "DrawPile",
+                    "do": "deal",
+                    "parameters": {
+                      "players": "ALL",
+                      "times": 6
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "GameLoop",
+        "stages": [
+          {
+            "name": "WaitingForPlayer",
+            "description": "siradaki oyuncunun bir kart oynamasi icin beklenir, kart secildikten sonra gizli bir deck'te tutulur",
+            "actions": [
+              {
+                "name": "PlayCard",
+                "when": [
+                  {
+                    "event": "CardPlayed",
+                    "player": "Current"
+                  }
+                ],
+                "then": [
+                  {
+                    "assetName": "SecretPile",
+                    "do": "put",
+                    "parameters": {
+                      "how do i say playedCard": "???"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "WaitingForOthers",
+            "description": "diger oyuncularin bir kart oynamasi icin beklenir, tum oyuncular oynadiktan (oyuncularin kartlari gizli deck'e koyulur) sonra gizli deck karistirilir ve main board uzerindeki card grid'lerine koyulur",
+            "actions": [
+              {
+                "name": "OthersPlayCard",
+                "when": [
+                  {
+                    "event": "CardPlayed",
+                    "player": "Others"
+                  }
+                ],
+                "then": [
+                  {
+                    "assetName": "SecretPile",
+                    "do": "put",
+                    "parameters": {
+                      "how do i say playedCard": "???"
+                    }
+                  },
+                  {
+                    "assetName": "SecretPile",
+                    "do": "shuffle",
+                    "parameters": null
+                  },
+                  {
+                    "assetName": "MainBoard",
+                    "do": "place",
+                    "parameters": {
+                      "grid": "CardArea1",
+                      "item": "SecretPile.pop()"
+                    }
+                  },
+                  {
+                    "assetName": "MainBoard",
+                    "do": "place",
+                    "parameters": {
+                      "grid": "CardArea2",
+                      "item": "SecretPile.pop()"
+                    }
+                  },
+                  {
+                    "assetName": "MainBoard",
+                    "do": "place",
+                    "parameters": {
+                      "grid": "CardArea3",
+                      "item": "SecretPile.pop()"
+                    }
+                  },
+                  {
+                    "assetName": "MainBoard",
+                    "do": "place",
+                    "parameters": {
+                      "grid": "CardArea4",
+                      "item": "SecretPile.pop()"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "WaitingForTokens",
+            "description": "diger oyuncularin yerdeki kartlar icin bir token oynamasi beklenir, ardindan gizli sekilde oynanan tokenlar acilir, puanlar hesaplanip score board uzerindeki rabbitler hareket ettirilir, ardindan her oyuncuya main deck'ten 1 kart dagitilir ve tur siradaki oyuncuya gecer",
+            "actions": [
+              {
+                "name": "PlayToken",
+                "when": [
+                  {
+                    "event": "TokenPlayed",
+                    "player": "All"
+                  }
+                ],
+                "then": [
+                  {
+                    "assetName": "Token1",
+                    "do": "flip",
+                    "parameters": null
+                  },
+                  {
+                    "assetName": "Token2",
+                    "do": "flip",
+                    "parameters": null
+                  },
+                  {
+                    "assetName": "Token3",
+                    "do": "flip",
+                    "parameters": null
+                  },
+                  {
+                    "assetName": "Token4",
+                    "do": "flip",
+                    "parameters": null
+                  },
+                  {
+                    "assetName": "TrackingBoard",
+                    "do": "calculateScores",
+                    "parameters": null
+                  },
+                  {
+                    "assetName": "DrawPile",
+                    "do": "deal",
+                    "parameters": {
+                      "players": "ALL",
+                      "times": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

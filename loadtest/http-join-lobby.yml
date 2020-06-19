@@ -1,0 +1,19 @@
+config:
+  target: 'http://localhost:8080'
+  tls:
+    rejectUnauthorized: false
+  http:
+    timeout: 5
+  phases:
+    - duration: 50
+      arrivalRate: 10
+  defaults:
+    headers:
+      Authorization: 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJtZWVwbGUtZW5naW5lIiwiYXVkIjoibWVlcGxlLWVuZ2luZSIsInN1YiI6IjVlYTI5NzRhMDhmZTA3NDRkZGNmMzA5NyIsImlhdCI6MTU5MjEyNTkyNSwiZXhwIjoxNTkyOTg5OTI1fQ.Gwo7AIewdzVaNrpxzCA9vrV2ks3_KGL2hFx0WGfp5nP-z8UeKJjRLPzyJMVA_HuZ2-GnipSDIZyoUj978DCafg'
+scenarios:
+  - flow:
+    - log: "New virtual user running"
+    - post:
+        url: "/lobby/join"
+        qs:
+          id: 5eb113081ef8852db7f9226f

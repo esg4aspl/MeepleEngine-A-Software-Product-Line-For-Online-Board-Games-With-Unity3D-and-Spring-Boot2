@@ -1,0 +1,426 @@
+package com.meepleengine.meeplecore
+
+import com.meepleengine.meeplecore.model.*
+import com.meepleengine.meeplecore.dixit.*
+import java.util.ArrayList
+import java.util.List
+import java.util.Collections
+import java.util.Map
+import java.util.HashMap
+import jdk.nashorn.internal.ir.ObjectNode
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ArrayNode
+import com.meepleengine.meeplecore.model.PlayerMessage
+import com.meepleengine.meeplecore.model.GameMessage
+
+rule "Start Game"
+when
+    $game: DixitGame( $players: getPlayers(), getTurnState() == TurnState.READY )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    for (Object object: $players) {
+        Player player = (Player) object;
+        JsonNode data = objectMapper.createObjectNode().put("objectId", player.getPlayerHand().getId());
+        PlayerMessage playerMessage = new PlayerMessage(player, "Info", data);
+        player.onAction(playerMessage);
+
+        PlayerHand playerHand = player.getPlayerHand();
+        for (Item card: playerHand.getCards()) {
+            data = objectMapper.createObjectNode().put("objectId", card.getId()).put("gridId", playerHand.getGrid().getId());
+            $game.onAction(new GameMessage("Move", data));
+            data = objectMapper.createObjectNode().put("objectId", card.getId());
+            playerMessage = new PlayerMessage(player, "Flip", data);
+            player.onAction(playerMessage);
+        }
+    }
+    System.out.println("Ready to Start!");
+end
+
+rule "Assign the Storyteller"
+when
+    $game: DixitGame( getTurnState() == TurnState.READY )
+    $player: Player()
+    $action: PlayerMessage( $player == getPlayer(), name == "Click" )
+then
+    $game.setTurnPlayer($player);
+    $player.setRole(Role.SPECIAL);
+    $game.setTurnState(TurnState.ACTIVE_SELECTS);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", "Game has started! Storyteller is " + $player.getId() + ".");
+    $game.onAction(new GameMessage("Info", data));
+    update ($game);
+    update ($player);
+    delete ($action);
+end
+
+rule "Storyteller Selects"
+when
+    $game: DixitGame( $turnPlayer: getTurnPlayer(), $shufflePile: getShufflePile() )
+    $action: PlayerMessage( $turnPlayer == getPlayer(), name == "Select")
+    $turnState: TurnState( $game.getTurnState() == ACTIVE_SELECTS )
+then
+    String cardId = $action.getData().get("objectId").toString();
+    Map<Card, Player> shufflePileMap = new HashMap<>();
+    ObjectMapper objectMapper = new ObjectMapper();
+    Card card = $turnPlayer.getPlayerHand().popCard(cardId);
+    if (card != null) {
+        shufflePileMap.put(card, $turnPlayer);
+        $shufflePile.addCard(card);
+        JsonNode data = objectMapper.createObjectNode().put("objectId", cardId);
+        $turnPlayer.onAction(new PlayerMessage($turnPlayer, "Flip", data));
+        data = objectMapper.createObjectNode().put("objectId", cardId).put("gridId", $shufflePile.getGrid().getId());
+        $game.onAction(new GameMessage("Move", data));
+        System.out.println("Card is added to shufflePile; shufflePile size is: " + $shufflePile.getCards().size());
+    } else {
+        JsonNode err = objectMapper.createObjectNode().put("message", "card does not exists!");
+        $turnPlayer.onAction(new PlayerMessage($turnPlayer, "Info", err));
+    }
+    insert ($shufflePile);
+    insert (shufflePileMap);
+    delete ($action);
+end
+
+rule "Update Active Players"
+when
+    $game: DixitGame( $turnPlayer: getTurnPlayer() )
+    $shufflePileMap: Map( containsValue($turnPlayer) )
+    $turnState: TurnState( $game.getTurnState() == ACTIVE_SELECTS )
+then
+    List activePlayers = new ArrayList();
+    activePlayers.addAll($game.getPlayers());
+    activePlayers.remove($turnPlayer);
+    $game.setActivePlayers(activePlayers);
+    $game.setTurnState(TurnState.OTHERS_SELECT);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", "Storyteller selected the card. Turn for others!");
+    $game.onAction(new GameMessage("Info", data));
+    update ($game);
+    System.out.println("Active players size is: " + $game.getActivePlayers().size());
+end
+
+rule "Not Your Turn for Others"
+when
+    $game: DixitGame( getTurnState() == TurnState.ACTIVE_SELECTS )
+    $player: Player( getRole() == Role.OTHERS )
+    $action: PlayerMessage( $player == getPlayer(), name == "Select")
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", "not your turn!");
+    $player.onAction(new PlayerMessage($player, "Info", data));
+    delete ($action);
+end
+
+rule "Not Your Turn for Storyteller"
+when
+    $game: DixitGame( getTurnState() == TurnState.OTHERS_SELECT )
+    $player: Player( getRole() == Role.SPECIAL )
+    $action: PlayerMessage( $player == getPlayer(), name == "Select")
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", "not your turn!");
+    $player.onAction(new PlayerMessage($player, "Info", data));
+    delete ($action);
+end
+
+rule "Other Players Select"
+when
+    $player: Player( getRole() == Role.OTHERS)
+    $game: DixitGame( $shufflePile: getShufflePile(), $activePlayers: getActivePlayers() )
+    $shufflePileMap: Map()
+    $action: PlayerMessage( $player == getPlayer(), name == "Select")
+    $turnState: TurnState( $game.getTurnState() == OTHERS_SELECT )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    if (!$activePlayers.contains($player) || $activePlayers.size() == 0) {
+        JsonNode info = objectMapper.createObjectNode().put("message", "it is not your turn!");
+        $player.onAction(new PlayerMessage($player, "Info", info));
+    } else {
+        String cardId = $action.getData().get("objectId").toString();
+        Card card = $player.getPlayerHand().popCard(cardId);
+        if (card != null) {
+            $shufflePileMap.put(card, $player);
+            $shufflePile.addCard(card);
+            $activePlayers.remove($player);
+            JsonNode data = objectMapper.createObjectNode().put("objectId", cardId);
+            $player.onAction(new PlayerMessage($player, "Flip", data));
+            data = objectMapper.createObjectNode().put("objectId", cardId).put("gridId", $shufflePile.getGrid().getId());
+            $game.onAction(new GameMessage("Move", data));
+            System.out.println("Card is added to shufflePile; shufflePile size is: " + $shufflePile.getCards().size());
+            System.out.println($player.getId() + " is removed from the active players; size is: " + $game.getActivePlayers().size());
+        } else {
+            JsonNode err = objectMapper.createObjectNode().put("message", "card does not exists!");
+            $player.onAction(new PlayerMessage($player, "Info", err));
+        }
+    }
+    update ($shufflePile);
+    update ($shufflePileMap);
+    update ($game);
+    delete ($action);
+end
+
+rule "Shuffle Pile and Update Active Players"
+when
+    $game: DixitGame( $board: getBoard(), $turnPlayer: getTurnPlayer() )
+    $shufflePileMap: Map( values().size() == $game.getPlayers().size() )
+    $turnState: TurnState( $game.getTurnState() == OTHERS_SELECT )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    Board cardRevealBoard = (Board) $board.getGrids().get(12).getItemList().get(0);
+    List<Grid> cardRevealBoardGrids = cardRevealBoard.getGrids();
+    Deck shufflePile = $game.getShufflePile();
+    int shufflePileSize = shufflePile.getCards().size();
+    Collections.shuffle(shufflePile.getCards());
+    Grid shufflePileGrid = shufflePile.getGrid();
+    for (int i = 0; i < shufflePileSize; i++) {
+        Item item = shufflePileGrid.getItemList().get(0);
+        JsonNode moveData = objectMapper.createObjectNode().put("objectId", item.getId()).put("gridId", cardRevealBoardGrids.get(i).getId());
+        $game.onAction(new GameMessage("Move", moveData));
+        shufflePileGrid.removeItem(item);
+        cardRevealBoardGrids.get(i).addItem(item);
+        JsonNode flipData = objectMapper.createObjectNode().put("objectId", item.getId());
+        $game.onAction(new GameMessage("Flip", flipData));
+        System.out.println("Shuffle pile grid's item length: " + shufflePileGrid.getItemList().size());
+        System.out.println("Card reveal board grid's length (moved card): " + cardRevealBoardGrids.get(i).getItemList().size());
+    }
+    List activePlayers = new ArrayList();
+    activePlayers.addAll($game.getPlayers());
+    activePlayers.remove($turnPlayer);
+    $game.setActivePlayers(activePlayers);
+    $game.setTurnState(TurnState.VOTING);
+    $game.setVotingTokensMap(new HashMap<>());
+    update ($game);
+    JsonNode gameData = objectMapper.createObjectNode().put("info", "Cards are revealed. Time for " + $game.getTurnState().toString() + "!");
+    $game.onAction(new GameMessage("Info", gameData));
+    System.out.println("Active players size is: " + $game.getActivePlayers().size());
+end
+
+rule "Vote for the Cards"
+when
+    $player: Player( getRole() == Role.OTHERS )
+    $game: DixitGame( $activePlayers: getActivePlayers() contains $player, $board: getBoard(), $votingTokensMap: getVotingTokensMap() )
+    $shufflePileMap: Map()
+    $action: PlayerMessage( player == $player, name == "Select" )
+    $turnState: TurnState( $game.getTurnState() == VOTING )
+then
+    String votingTokenId = $action.getData().get("objectId").asText();
+    System.out.println("Player " + $player.getId() + " voted to a card with the tokenId: " + votingTokenId);
+    Board cardRevealBoard = (Board) $board.getGrids().get(12).getItemList().get(0);
+    List<Grid> cardRevealBoardGrids = cardRevealBoard.getGrids();
+    Board tokenBoard = (Board) $board.getGrids().get(11).getItemList().get(0);
+    List<Grid> tokenBoardGrids = tokenBoard.getGrids();
+
+    PlayerItem votingToken = (PlayerItem) $player.getPlayerItem(votingTokenId);
+    ObjectMapper objectMapper = new ObjectMapper();
+    if (votingToken != null) {
+        Grid votingTokenGrid = votingToken.getCurrentGrid();
+        Card chosenCard = (Card) cardRevealBoardGrids.get(votingToken.getNo()).getItemList().get(0);
+        if (chosenCard != null) {
+            if ($shufflePileMap.get(chosenCard) != $player) {
+                System.out.println("VotingToken exists, player chose a valid card with id: " + chosenCard.getId() + "!");
+                $votingTokensMap.put(votingToken, votingToken.getCurrentGrid());
+                votingTokenGrid.removeItem(votingToken);
+                for (Grid tokenBoardGrid: tokenBoardGrids) {
+                    if (tokenBoardGrid.getItemList().size() == 0) {
+                        tokenBoardGrid.addItem(votingToken);
+                        JsonNode moveData = objectMapper.createObjectNode().put("votingTokenId", votingTokenId).put("gridId", tokenBoardGrid.getId());
+                        $game.onAction(new GameMessage("Move", moveData));
+                        break;
+                    }
+                }
+                $activePlayers.remove($player);
+                System.out.println($player.getId() + " is removed from the active players; size is: " + $game.getActivePlayers().size());
+            } else {
+                JsonNode err = objectMapper.createObjectNode().put("message", "you can not choose your own card: " + chosenCard.getId());
+                $player.onAction(new PlayerMessage($player, $action.getName(), err));
+            }
+        } else {
+            JsonNode data = objectMapper.createObjectNode().put("message", "card does not exists!");
+            $player.onAction(new PlayerMessage($player, $action.getName(), data));
+        }
+    } else {
+        JsonNode message = objectMapper.createObjectNode().put("message", "voting token does not exists!");
+        $player.onAction(new PlayerMessage($player, $action.getName(), message));
+    }
+    update ($game);
+    delete ($action);
+end
+
+rule "Reveal The Votes"
+when
+    $game: DixitGame( $votingTokensMap: getVotingTokensMap(), $players: getPlayers() )
+    $value: Integer( this == $players.size()-1 ) from $votingTokensMap.size()
+    $turnState: TurnState( $game.getTurnState() == VOTING )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    for (Object item: $votingTokensMap.keySet()) {
+        PlayerItem votingToken = (PlayerItem) item;
+        JsonNode flipData = objectMapper.createObjectNode().put("objectId", votingToken.getId());
+        $game.onAction(new GameMessage("Flip", flipData));
+    }
+    $game.setTurnState(TurnState.RESULTS);
+    JsonNode info = objectMapper.createObjectNode().put("message", "Votes are revealed! Scores are calculating.");
+    $game.onAction(new GameMessage("Info", info));
+    update ($game);
+    System.out.println("State is updated, new state is: " + $game.getTurnState());
+end
+
+rule "Calculate Scores"
+when
+    $player: Player()
+    $game: DixitGame( $board: getBoard(), $votingTokensMap: getVotingTokensMap() )
+    $shufflePileMap: Map( containsValue($player) )
+    $turnState: TurnState( $game.getTurnState() == RESULTS )
+then
+    $game.calculateScore($shufflePileMap);
+    Board scoreboard = (Board) $board.getGrids().get(13).getItemList().get(0);
+    ObjectMapper objectMapper = new ObjectMapper();
+    for (Player player: $game.getPlayers()) {
+        Grid scoreboardGrid = null;
+        if (player.getScore() > scoreboard.getGrids().size() - 1) {
+            scoreboardGrid = scoreboard.getGrids().get(scoreboard.getGrids().size() - 1);
+        } else {
+            scoreboardGrid = scoreboard.getGrids().get(player.getScore());
+        }
+        PlayerItem rabbit = player.getPlayerItemMap().get("rabbit");
+        Grid currentGrid = rabbit.getCurrentGrid();
+        currentGrid.removeItem(rabbit);
+        Board rabbitBoard = (Board) scoreboardGrid.getItemList().get(0);
+        List<Grid> rabbitBoardGrids = rabbitBoard.getGrids();
+        for (Grid rabbitBoardGrid: rabbitBoardGrids) {
+            if (rabbitBoardGrid.getItemList().size() == 0) {
+                rabbitBoardGrid.addItem(rabbit);
+                JsonNode move = objectMapper.createObjectNode().put("objectId", rabbit.getId()).put("gridId", rabbitBoardGrid.getId());
+                $game.onAction(new GameMessage("Move", move));
+                break;
+            }
+        }
+    }
+    $game.setTurnState(TurnState.CHECK_END);
+    delete ($shufflePileMap);
+    update ($game);
+end
+
+rule "Check The Score" no-loop
+when
+    $game: DixitGame( $board: getBoard(), $players: getPlayers() )
+    $turnState: TurnState( $game.getTurnState() == CHECK_END )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    Board scoreboard = (Board) $board.getGrids().get(13).getItemList().get(0);
+    Board rabbitBoard = (Board) scoreboard.getGrids().get(scoreboard.getGrids().size()-1).getItemList().get(0); // 30.griddeki rabbitBoard
+    for (Grid rabbitBoardGrid: rabbitBoard.getGrids()) {
+        int itemSize = rabbitBoardGrid.getItemList().size();
+        if (itemSize != 0) {
+            JsonNode gameInfo = objectMapper.createObjectNode().put("message", "Game over!");
+            $game.onAction(new GameMessage("Info", gameInfo));
+            $game.setTurnState(TurnState.GAME_OVER);
+            Item item = rabbitBoardGrid.getItemList().get(0);
+            PlayerItem rabbit = (PlayerItem) item;
+            Player winner = rabbit.getPlayer();
+            JsonNode gameData = objectMapper.createObjectNode().put("message", "The winner is " + winner.getId());
+            $game.onAction(new GameMessage("Info", gameData));
+            break;
+        }
+    }
+    update ($game);
+    System.out.println("Score is checked!");
+end
+
+rule "Check Draw Pile"
+when
+    $game: DixitGame( $turnPlayer: getTurnPlayer(), $players: getPlayers(), $drawPile: getDrawPile() )
+    $turnState: TurnState( $game.getTurnState() == CHECK_END )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    if ($drawPile.getCards().size() < $players.size()) {
+        JsonNode gameInfo = objectMapper.createObjectNode().put("message", "not enough cards in draw pile, game is end!");
+        $game.onAction(new GameMessage("Info", gameInfo));
+        $game.setTurnState(TurnState.GAME_OVER);
+        List<Player> winners = $game.announceWinners();
+        for (Player player: winners) {
+            JsonNode info = objectMapper.createObjectNode().put("message", "The winner is " + player.getId());
+            $game.onAction(new GameMessage("Info", info));
+        }
+    } else {
+        $game.setTurnState(TurnState.NEW_TURN);
+    }
+    update ($game);
+    System.out.println("Draw pile is checked!");
+    JsonNode gameData = objectMapper.createObjectNode().put("state", $game.getTurnState().toString());
+    $game.onAction(new GameMessage("Info", gameData));
+end
+
+rule "Prepare for New Turn: Clear Board"
+when
+    $game: DixitGame( $turnPlayer: getTurnPlayer(), $board: getBoard(), $shufflePile: getShufflePile(),
+                      $votingTokensMap: getVotingTokensMap(), $discardPile: getDiscardPile() )
+    $turnState: TurnState( $game.getTurnState() == NEW_TURN )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    Board cardRevealBoard = (Board) $board.getGrids().get(12).getItemList().get(0);
+    List<Grid> cardRevealBoardGrids = cardRevealBoard.getGrids();
+    for (Grid cardRevealBoardGrid: cardRevealBoardGrids) {
+        if (cardRevealBoardGrid.getItemList().size() != 0) {
+            Card discardCard = (Card) cardRevealBoardGrid.getItemList().get(0);
+            cardRevealBoardGrid.removeItem(discardCard);
+            $discardPile.addCard(discardCard);
+            JsonNode discardData = objectMapper.createObjectNode().put("objectId", discardCard.getId()).put("gridId", $discardPile.getGrid().getId());
+            $game.onAction(new GameMessage("Move", discardData));
+        }
+    }
+    Board tokenBoard = (Board) $board.getGrids().get(11).getItemList().get(0);
+    List<Grid> tokenBoardGrids = tokenBoard.getGrids();
+    for (Grid tokenBoardGrid: tokenBoardGrids) {
+        if (tokenBoardGrid.getItemList().size() != 0) {
+            PlayerItem votingToken = (PlayerItem) tokenBoardGrid.getItemList().get(0);
+            Grid votingTokenGrid = (Grid) $votingTokensMap.get(votingToken);
+            tokenBoardGrid.removeItem(votingToken);
+            votingTokenGrid.addItem(votingToken);
+            JsonNode tokenData = objectMapper.createObjectNode().put("objectId", votingToken.getId()).put("gridId", votingTokenGrid.getId());
+            $game.onAction(new GameMessage("Move", tokenData));
+        }
+    }
+    update ($discardPile);
+end
+
+rule "Prepare for New Turn: Draw Cards"
+when
+    $game: DixitGame( $turnPlayer: getTurnPlayer(), $drawPile: getDrawPile() )
+    $turnState: TurnState( $game.getTurnState() == NEW_TURN )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    for (Player player: $game.getPlayers()) {
+        PlayerHand playerHand = player.getPlayerHand();
+        Card card = $drawPile.draw();
+        playerHand.addCard(card);
+        JsonNode data = objectMapper.createObjectNode().put("objectId", card.getId()).put("gridId", playerHand.getGrid().getId());
+        $game.onAction(new GameMessage("Move", data));
+        update (player);
+    }
+end
+
+rule "Prepare for New Turn: Assign the Storyteller"
+when
+    $game: DixitGame( $turnPlayer: getTurnPlayer() )
+    $turnState: TurnState( $game.getTurnState() == NEW_TURN )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    $turnPlayer.setRole(Role.OTHERS);
+    int turnPlayerIndex = $game.getPlayers().indexOf($turnPlayer);
+    int nextPlayerIndex = turnPlayerIndex + 1 > $game.getPlayers().size() ? 0 : turnPlayerIndex + 1;
+    $turnPlayer = $game.getPlayers().get(nextPlayerIndex);
+    $game.setTurnState(TurnState.ACTIVE_SELECTS);
+    $game.setTurnPlayer($turnPlayer);
+    $turnPlayer.setRole(Role.SPECIAL);
+    List activePlayers = new ArrayList();
+    activePlayers.add($turnPlayer);
+    $game.setActivePlayers(activePlayers);
+    JsonNode gameData = objectMapper.createObjectNode().put("message", "New turn is beginning! Storyteller is " + $game.getTurnPlayer().getId() + ".");
+    $game.onAction(new GameMessage("Info", gameData));
+    update ($game);
+    update ($turnPlayer);
+    System.out.println("Turn is updated, new turn for: " + $game.getTurnPlayer().getId());
+    System.out.println("Active players size is: " + $game.getActivePlayers().size());
+    System.out.println("State is updated, new state is: " + $game.getTurnState());
+end

@@ -1,0 +1,31 @@
+
+spring:
+  application:
+    name: meeple-server
+
+server:
+  port: 8080
+
+spring.main.banner-mode: off
+
+logging.level.com.jamesye.starter.realtimeserver: DEBUG
+
+swagger:
+  host:
+    url: localhost:8080
+    path:
+
+mongo:
+  databaseName: meepledb
+  connectionString: mongodb+srv://mongoUser:6160AG3yOShxubW6@blit-mongo-jyjay.gcp.mongodb.net/test?authSource=admin&replicaSet=blit-mongo-shard-0&w=majority&readPreference=primary&appname=MongoDB%20Compass%20Community&retryWrites=true&ssl=true
+
+---
+
+spring:
+  profiles: dev
+
+swagger:
+  host:
+    url: http://api.meepleengine.com
+    path:
+

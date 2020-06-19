@@ -1,0 +1,43 @@
+
+variables:
+  MAVEN_CLI_OPTS: "--batch-mode"
+
+cache:
+  paths:
+    - target/
+
+build:
+  image: maven:latest
+  stage: build
+  script:
+    - mvn $MAVEN_CLI_OPTS package
+  artifacts:
+    name: "meeple-server-$CI_BUILD_ID-$CI_BUILD_REF"
+    expire_in: 1 week
+    paths:
+      - target/*.jar
+
+test:
+  image: maven:latest
+  stage: test
+  script:
+    - mvn $MAVEN_CLI_OPTS test
+
+#sonar:
+#  image: maven:latest
+#  stage: test
+#  script:
+#    - mvn sonar:sonar -Dsonar.host.url=http://35.204.95.232 -Dsonar.login=2098d5d6b011a7abb7b9a20c37ee21281a9a393d
+
+deploy:
+  image: docker:19.03.1
+  stage: deploy
+  services:
+    - docker:dind
+  script: |
+    echo "$SERVICE_ACCOUNT" | base64 -d > gcp_credentials.json
+    docker build -t gcr.io/meeple-engine/meeple-server:$CI_COMMIT_SHA .
+    cat gcp_credentials.json | docker login -u _json_key --password-stdin https://gcr.io
+    docker push gcr.io/meeple-engine/meeple-server:$CI_COMMIT_SHA
+  only:
+    - master

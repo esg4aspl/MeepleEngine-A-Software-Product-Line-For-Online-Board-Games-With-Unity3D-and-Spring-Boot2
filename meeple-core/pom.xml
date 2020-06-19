@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.meepleengine</groupId>
+    <artifactId>meeple-core</artifactId>
+    <version>0.0.9</version>
+    <packaging>jar</packaging>
+
+    <name>Meeple Core</name>
+    <description>Core library for Meeple</description>
+    <url>https://gitlab.com/meeple-engine/meeple-core</url>
+
+    <organization>
+        <name>com.meepleengine</name>
+        <url>https://gitlab.com/meeple-engine</url>
+    </organization>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://gitlab.com/meeple-engine/meeple-core/issues</url>
+    </issueManagement>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>https://gitlab.com/meeple-engine/meeple-core/blob/master/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://gitlab.com/meeple-engine/meeple-core.git</url>
+        <connection>scm:git:git://gitlab.com/meeple-engine/meeple-core.git</connection>
+        <developerConnection>scm:git:ssh://git@gitlab.com:meeple-engine/meeple-core.git</developerConnection>
+    </scm>
+
+    <developers>
+        <developer>
+            <name>Ahmet Şemsettin Özdemirden</name>
+        </developer>
+        <developer>
+            <name>Elif Duran</name>
+        </developer>
+        <developer>
+            <name>Mustafa Berkay Özkan</name>
+        </developer>
+    </developers>
+
+
+    <properties>
+        <maven.compiler.source>1.6</maven.compiler.source>
+        <maven.compiler.target>1.6</maven.compiler.target>
+        <java.version>1.8</java.version>
+        <dependency.jackson-2-version>2.10.0</dependency.jackson-2-version>
+        <drools-version>7.15.0.Final</drools-version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${dependency.jackson-2-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${dependency.jackson-2-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.drools</groupId>
+            <artifactId>drools-core</artifactId>
+            <version>${drools-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.drools</groupId>
+            <artifactId>drools-compiler</artifactId>
+            <version>${drools-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.30</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>RELEASE</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>3.6.0.1398</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>8</source>
+                    <target>8</target>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
+
+</project>

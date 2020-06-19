@@ -1,0 +1,194 @@
+package com.meepleengine.meeplecore
+
+import com.meepleengine.meeplecore.model.*
+import com.meepleengine.meeplecore.guesswho.*
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+
+rule "Start Game"
+when
+    $game: GuessWhoGame( $board: getBoard(), getNumberOfPlayers() == 2, getTurnState() == TurnState.READY )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    Grid redMysteryCardGrid = $board.getGrids().get(3);
+    Grid blueMysteryCardGrid = $board.getGrids().get(4);
+    Player redPlayer = $game.getPlayers().get(0);
+    Player bluePlayer = $game.getPlayers().get(1);
+    JsonNode move = objectMapper.createObjectNode().put("objectId", $game.getRedMysteryCard().getId()).put("gridId", redMysteryCardGrid.getId());
+    $game.onAction(new GameMessage("Move", move));
+    move = objectMapper.createObjectNode().put("objectId", $game.getBlueMysteryCard().getId()).put("gridId", blueMysteryCardGrid.getId());
+    $game.onAction(new GameMessage("Move", move));
+    JsonNode flip = objectMapper.createObjectNode().put("objectId", $game.getRedMysteryCard().getId());
+    redPlayer.onAction(new PlayerMessage(redPlayer, "Flip", flip));
+    flip = objectMapper.createObjectNode().put("objectId", $game.getBlueMysteryCard().getId());
+    bluePlayer.onAction(new PlayerMessage(bluePlayer, "Flip", flip));
+    System.out.println("Ready to Start!");
+end
+
+rule "Assign the Active Player"
+when
+    $game: GuessWhoGame( getTurnState() == TurnState.READY )
+    $action: PlayerMessage( $player: getPlayer(), name == "Click" )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    String buttonName = $action.getData().get("buttonName").asText();
+    if (!buttonName.equals("Ready")) {
+        JsonNode err = objectMapper.createObjectNode().put("error", "the button " + buttonName + " is not found!");
+        $player.onAction(new PlayerMessage($player, "Info", err));
+    } else {
+        $game.setTurnColor($player.getColor());
+        $game.setTurnState(TurnState.ACTIVE_SELECTS);
+        JsonNode data = objectMapper.createObjectNode().put("message", "Turn color is " + $game.getTurnColor().toString());
+        $game.onAction(new GameMessage("Info", data));
+    }
+    update ($game);
+    delete ($action);
+end
+
+rule "Eliminate the Cards"
+when
+    $game: GuessWhoGame( $board: getBoard(), $turnColor: getTurnColor(), getTurnState() == TurnState.ACTIVE_SELECTS )
+    $player: Player ( getColor() == $turnColor )
+    $action: PlayerMessage( getPlayer() == $player, name == "Flip" )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    String cardId = $action.getData().get("objectId").asText();
+    Grid boardGrid = null;
+    if ($turnColor == PlayerColor.RED) {
+        boardGrid = $board.getGrids().get(0);
+    } else {
+        boardGrid = $board.getGrids().get(1);
+    }
+    Board board = (Board)boardGrid.getItemList().get(0);
+    Card card = (Card) board.findById(cardId);
+    if (card != null) {
+        JsonNode flipData = objectMapper.createObjectNode().put("objectId", card.getId());
+        $game.onAction(new GameMessage("Flip", flipData));
+    } else {
+        JsonNode data = objectMapper.createObjectNode().put("message", "card does not exists!");
+        $player.onAction(new PlayerMessage($player, "Info", data));
+        System.out.println("Card does not exist!");
+    }
+    delete ($action);
+end
+
+rule "Guess the Mystery Card"
+when
+    $game: GuessWhoGame( $board: getBoard(), $turnColor: getTurnColor(), getTurnState() == TurnState.ACTIVE_SELECTS )
+    $player: Player ( getColor() == $turnColor )
+    $action: PlayerMessage( getPlayer() == $player, name == "Move", $data: getData() )
+then
+    String cardId = $action.getData().get("objectId").asText();
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = null;
+    switch ($turnColor) {
+        case BLUE:
+            Board blueBoard = (Board) $board.getGrids().get(1).getItemList().get(0);
+            Card blueCard = (Card) blueBoard.findById(cardId);
+            if (blueCard == null) {
+                data = objectMapper.createObjectNode().put("message", "card does not exists!");
+                $player.onAction(new PlayerMessage($player, "Info", data));
+                break;
+            } else {
+                $game.setTurnState(TurnState.GAME_OVER);
+                Grid blueGuessGrid = $board.getGrids().get(6);
+                Grid blueBoardGrid = $board.getGrids().get(1);
+                blueBoardGrid.removeItem(blueCard);
+                blueGuessGrid.addItem(blueCard);
+                data = objectMapper.createObjectNode().put("objectId", blueCard.getId()).put("gridId", blueGuessGrid.getId());
+                $game.onAction(new GameMessage("Move", data));
+                $game.setTurnState(TurnState.GAME_OVER);
+            }
+            break;
+        case RED:
+            Board redBoard = (Board) $board.getGrids().get(0).getItemList().get(0);
+            Card redCard = (Card) redBoard.findById(cardId);
+            if (redCard == null) {
+                data = objectMapper.createObjectNode().put("message", "card does not exists!");
+                $player.onAction(new PlayerMessage($player, "Info", data));
+                break;
+            } else {
+                $game.setTurnState(TurnState.GAME_OVER);
+                Grid redGuessGrid = $board.getGrids().get(5);
+                Grid redBoardGrid = $board.getGrids().get(0);
+                redBoardGrid.removeItem(redCard);
+                redGuessGrid.addItem(redCard);
+                data = objectMapper.createObjectNode().put("objectId", redCard.getId()).put("gridId", redGuessGrid.getId());
+                $game.onAction(new GameMessage("Move", data));
+                $game.setTurnState(TurnState.GAME_OVER);
+            }
+            break;
+    }
+    update ($game);
+    delete ($action);
+end
+
+rule "End of Turn"
+when
+    $game: GuessWhoGame( $turnColor: getTurnColor(), getTurnState() == TurnState.ACTIVE_SELECTS )
+    $player: Player ( getColor() == $turnColor )
+    $action: PlayerMessage( getPlayer() == $player, name == "Click" )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    String buttonName = $action.getData().get("buttonName").asText();
+    if (!buttonName.equals("Done")) {
+        JsonNode err = objectMapper.createObjectNode().put("error", "the button " + buttonName + " is not found!");
+        $player.onAction(new PlayerMessage($player, $action.getName(), err));
+    } else {
+        $game.setTurnState(TurnState.NEW_TURN);
+    }
+    update ($game);
+    delete ($action);
+end
+
+rule "Update the Turn Color"
+when
+    $game: GuessWhoGame( $turnColor: getTurnColor(), getTurnState() == TurnState.NEW_TURN )
+then
+    if ($turnColor == PlayerColor.RED) {
+        $game.setTurnColor(PlayerColor.BLUE);
+    } else {
+        $game.setTurnColor(PlayerColor.RED);
+    }
+    $game.setTurnState(TurnState.ACTIVE_SELECTS);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", "New turn is started. " + $game.getTurnColor().toString() + "'s turn.");
+    $game.onAction(new GameMessage("Info", data));
+    update ($game);
+end
+
+rule "Game Over: Announce the Winner"
+when
+    $game: GuessWhoGame( $board: getBoard(), $turnColor: getTurnColor(), getTurnState() == TurnState.GAME_OVER )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = null;
+    if ($turnColor == PlayerColor.RED) {
+        Card redGuessCard = (Card) $board.getGrids().get(5).getItemList().get(0);
+        String redMatch = redGuessCard.getData().get("id").asText();
+        if (redMatch.equals($game.getBlueMysteryCard().getData().get("id").asText())) {
+            data = objectMapper.createObjectNode().put("message", "Winner is " + PlayerColor.RED.toString());
+        } else {
+            data = objectMapper.createObjectNode().put("message", "Winner is " + PlayerColor.BLUE.toString());
+        }
+    } else if ($turnColor == PlayerColor.BLUE) {
+        Card blueGuessCard = (Card) $board.getGrids().get(6).getItemList().get(0);
+        String blueMatch = blueGuessCard.getData().get("id").asText();
+        if (blueMatch.equals($game.getRedMysteryCard().getData().get("id").asText())) {
+            data = objectMapper.createObjectNode().put("message", "Winner is " + PlayerColor.BLUE.toString());
+        } else {
+            data = objectMapper.createObjectNode().put("message", "Winner is " + PlayerColor.RED.toString());
+        }
+    } else {
+        data = objectMapper.createObjectNode().put("message", "game is not over!");
+    }
+    $game.onAction(new GameMessage("Info", data));
+    Player redPlayer = $game.getPlayers().get(0);
+    Player bluePlayer = $game.getPlayers().get(1);
+    JsonNode flip = objectMapper.createObjectNode().put("objectId", $game.getRedMysteryCard().getId());
+    bluePlayer.onAction(new PlayerMessage(bluePlayer, "Flip", flip));
+    flip = objectMapper.createObjectNode().put("objectId", $game.getBlueMysteryCard().getId());
+    redPlayer.onAction(new PlayerMessage(redPlayer, "Flip", flip));
+end
+
+

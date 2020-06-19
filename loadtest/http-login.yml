@@ -1,0 +1,20 @@
+config:
+  target: 'http://localhost:8080'
+  tls:
+    rejectUnauthorized: false
+  http:
+    timeout: 5
+  phases:
+    - duration: 50
+      arrivalRate: 10
+  defaults:
+    headers:
+      x-my-service-auth: '987401838271002188298567'
+scenarios:
+  - flow:
+    - log: "New virtual user running"
+    - post:
+        url: "/user/login"
+        json:
+          username: user1
+          password: sifre123

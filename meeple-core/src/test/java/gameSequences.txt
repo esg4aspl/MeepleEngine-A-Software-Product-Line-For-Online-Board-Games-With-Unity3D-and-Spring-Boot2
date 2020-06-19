@@ -1,0 +1,166 @@
+
+=== MeepleCheckers ===
+
+// whitePlayer creates game
+$ createGame(MeepleCheckers)
+game created
+<- game
+
+// whitePlayer joins game
+$ joinGame(game, whitePlayerListener)
+joined
+
+// blackPlayer joins game
+$ joinGame(game, blackPlayerListener)
+joined
+
+$ game.startGame()
+<- all assets
+<- initial state
+<- available items and their commands
+
+ = turn1 =
+$ getAvailableItems(IPlayer1)
+- whitePiece1
+- whitePiece2
+- whitePiece3
+- whitePiece4
+
+$ getAvailableCommands(IPlayer1, whitePiece1)
+- actionPiece(0,1)
+
+$ applyCommand(IPlayer1, whitePiece1, actionPiece(0,1))
+<- 'actionPiece(0,1)' on whitePiece1 received by (whitePlayer)
+<- 'actionPiece(0,1)' on whitePiece1 received by (blackPlayer)
+
+// whitePlayer tries to action piece
+$ actionPiece(BlackPiece1, pos(1,3))
+<- forbidden received (Command) (blackPlayer)
+
+// whitePlayer actions piece
+$ actionPiece(WhitePiece1, pos(0,2))
+<- piece actiond received (Command) (whitePlayer)
+<- piece actiond received (Command) (blackPlayer)
+
+ = end of turn1 =
+
+=== Dixit ===
+ = turn1 =
+ -> IPlayer1
+$ getAvailableItems(IPlayer1)
+- card1
+- card2
+- card3
+- card4
+- card5
+- card6
+$ getAvailableCommands(IPlayer1, card1)
+- playCard()
+$ selectCommand(IPlayer1, card1, playCard())
+
+ -> IPlayer2, player3 and player4 simultaneously
+$ getAvailableItems(IPlayer2)
+- card7
+- card8
+- card9
+- card10
+- card11
+- card12
+$ getAvailableCommands(IPlayer2, card8)
+- playCard()
+$ selectCommand(IPlayer2, card8, playCard())
+
+ -> IPlayer2, player3 and player4 simultaneously
+$ getAvailableItems(IPlayer2)
+- votingtoken1p2
+- votingtoken2p2
+- votingtoken3p2
+- votingtoken4p2
+$ getAvailableCommands(IPlayer2, votingtoken3p2)
+- playVotingToken()
+$ selectCommand(IPlayer2, votingtoken3p2, playVotingToken())
+
+=== Satranc ===
+$ getAvailableItems(IPlayer1)
+- at1
+- at2
+- piyon1
+...
+$ getAvailableCommands(IPlayer1, at1)
+- action(a3)
+- action(c3)
+$ selectCommand(IPlayer1, at1, action(a3))
+
+
+=== Carcassone ===
+= 1 =
+
+$ getAvailableItems(IPlayer1)
+- deck
+$ getAvailableCommands(IPlayer1, deck)
+- drawTile()
+$ selectCommand(IPlayer1, deck, drawTile())
+
+= 2 =
+
+$ getAvailableItems(IPlayer1)
+- tile1
+$ getAvailableCommands(IPlayer1, tile1)
+- placeTile(grid_0_+1, degree_0)
+- placeTile(grid_0_-1, degree_90)
+- placeTile(grid_0_-1, degree_180)
+- placeTile(grid_0_-1, degree_270)
+$ selectCommand(IPlayer1, tile1, placeTile(grid_0_+1, degree_0))
+
+= 3 =
+$ getAvailableItems(IPlayer1)
+- figure1
+- figure2
+- figure3
+- figure4
+- figure5
+- figure6
+- figure7
+$ getAvailableCommands(IPlayer1, figure1)
+- placeFigure(tile1, slot0)
+- placeFigure(tile1, slot1)
+$ selectCommand(IPlayer1, figure1, placeFigure(tile1, slot1))
+
+== new turn ==
+
+= 1 =
+
+$ getAvailableItems(IPlayer2)
+- deck
+$ getAvailableCommands(IPlayer2, deck)
+- drawTile()
+$ selectCommand(IPlayer2, deck, drawTile())
+
+= 2 =
+
+$ getAvailableItems(IPlayer2)
+- tile2
+$ getAvailableCommands(IPlayer2, tile2)
+- placeTile(grid_0_+2, degree_90)
+- placeTile(grid_+1_+1, degree_180)
+- placeTile(grid_0_+1, degree_0)
+- placeTile(grid_0_+1, degree_270)
+- placeTile(grid_0_-1, degree_270)
+- placeTile(grid_-1_0, degree_90)
+- placeTile(grid_-1_0, degree_180)
+- placeTile(grid_-1_+1, degree_0)
+$ selectCommand(IPlayer2, tile2, placeTile(grid_+1_+1, degree_180))
+
+= 3 =
+$ getAvailableItems(IPlayer2)
+- figure1
+- figure2
+- figure3
+- figure4
+- figure5
+- figure6
+- figure7
+$ getAvailableCommands(IPlayer2, figure2)
+- placeFigure(tile2, slot1)
+- placeFigure(tile2, slot2)
+$ selectCommand(IPlayer2, figure2, placeFigure(tile2, slot1))

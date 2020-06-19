@@ -1,0 +1,50 @@
+
+variables:
+  MAVEN_CLI_OPTS: "--batch-mode"
+
+cache:
+  paths:
+    - target/
+
+build:
+  image: maven:latest
+  stage: build
+  script:
+    - mvn $MAVEN_CLI_OPTS compile
+
+test:
+  image: maven:latest
+  stage: test
+  script:
+    - mvn $MAVEN_CLI_OPTS test
+
+sonar:
+  image: maven:latest
+  stage: test
+  script:
+    - mvn sonar:sonar -Dsonar.host.url=http://35.204.95.232 -Dsonar.login=2098d5d6b011a7abb7b9a20c37ee21281a9a393d
+
+github:
+  image: docker:git
+  stage: deploy
+  script:
+    - git config --global user.email "ahmetozdemirden@std.iyte.edu.tr"
+    - git config --global user.name "A. Semsettin Ozdemirden"
+    - git clone "https://${GITHUB_USERNAME_PASSWORD}github.com/esg4aspl/MeepleEngine-A-Software-Product-Line-For-Online-Board-Games-With-Unity3D-and-Spring-Boot2.git" meeple-github
+    - cd meeple-github
+    - git submodule update --init --recursive
+    - cd meeple-core
+    - git pull origin master
+    - cd ..
+    - git add .
+    - git commit -m "update meeple-core to $CI_COMMIT_SHORT_SHA, $CI_COMMIT_MESSAGE"
+    - git push origin master
+
+deploy:
+  image: maven:latest
+  stage: deploy
+  script:
+    - echo "deploy stage"
+#    - mvn $MAVEN_CLI_OPTS deploy
+  only:
+    - master

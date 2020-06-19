@@ -1,0 +1,232 @@
+package com.meepleengine.meeplecore
+
+import com.meepleengine.meeplecore.model.*
+import com.meepleengine.meeplecore.codenames.*
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+
+rule "Start Game"
+when
+    $game: CodenamesGame( $board: getBoard(), getNumberOfPlayers() == 4, getTurnState() == TurnState.READY )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    Grid keyCardContainerGrid = $board.getGrids().get(3);
+    Item keyCard = keyCardContainerGrid.getItemList().get(0);
+    JsonNode move = objectMapper.createObjectNode().put("objectId",keyCard.getId()).put("gridId", keyCardContainerGrid.getId());
+    JsonNode flip = objectMapper.createObjectNode().put("objectId",keyCard.getId());
+    $game.onAction(new GameMessage("Move", move));
+    $game.onAction(new GameMessage("Flip", flip));
+    Grid wordBoardContainerGrid = $board.getGrids().get(2);
+    Board wordBoard = (Board) wordBoardContainerGrid.getItemList().get(0);
+    for (Grid wordBoardGrid: wordBoard.getGrids()) {
+        Item wordCard = wordBoardGrid.getItemList().get(0);
+        move = objectMapper.createObjectNode().put("objectId", wordCard.getId()).put("gridId", wordBoardGrid.getId());
+        $game.onAction(new GameMessage("Move", move));
+        Thread.sleep(1000);
+        flip = objectMapper.createObjectNode().put("objectId", wordCard.getId()).put("gridId", wordBoardGrid.getId());
+        $game.onAction(new GameMessage("Flip", flip));
+    }
+    System.out.println("Ready to Start!");
+end
+
+rule "Assign the Spymasters and the Turn"
+when
+    $game: CodenamesGame( getTurnState() == TurnState.READY )
+    $playerBlue: Player( getColor() == PlayerColor.BLUE )
+    $actionBlue: PlayerMessage( $playerBlue == getPlayer(), name == "Click" )
+    $playerRed: Player( getColor() == PlayerColor.RED)
+    $actionRed: PlayerMessage( $playerRed == getPlayer(), name == "Click" )
+then
+    $playerRed.setRole(Role.SPECIAL);
+    $playerBlue.setRole(Role.SPECIAL);
+    $game.setTurnState(TurnState.ACTIVE_SELECTS);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", $game.getTurnColor().toString() + "'s turn");
+    $game.onAction(new GameMessage("Info", data));
+    System.out.println("Spymasters are assigned!");
+    System.out.println("Turn for " + $game.getTurnColor() + "!");
+    update ($game);
+    delete ($actionBlue);
+    delete ($actionRed);
+end
+
+rule "Give the Clue"
+when
+    $game: CodenamesGame( $turnColor: getTurnColor() )
+    $player: Player( getColor() == $turnColor )
+    $role: Role( $player.getRole() == Role.SPECIAL )
+    $turnState: TurnState( $game.getTurnState() == ACTIVE_SELECTS )
+    $action: PlayerMessage( name == "Click", $data: getData(), $player == getPlayer() )
+then
+    String number = $data.get("buttonName").asText();
+    $game.setGuessNumber(Integer.parseInt(number) + 1);
+    $game.setTurnState(TurnState.OTHERS_SELECT);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", "Number of guess is " + $game.getGuessNumber());
+    $game.onAction(new GameMessage("Info", data));
+    insert ($game.getGuessNumber());
+    delete ($action);
+    update ($game);
+    System.out.println("Clue is given!, the number of guess is: " + $game.getGuessNumber());
+    System.out.println("Turn state is: " + $game.getTurnState());
+end
+
+rule "Guess the Card"
+when
+    $game: CodenamesGame( $turnColor: getTurnColor(), $keyMap: getKeyMap(), $words: getWords(), $board: getBoard() )
+    $guessNumber: Integer( $game.getGuessNumber() > 0 )
+    $player: Player( getRole() == Role.OTHERS, getColor() == $turnColor )
+    $turnState: TurnState( $game.getTurnState() == OTHERS_SELECT )
+    $action: PlayerMessage( name == "Select", $data: getData(), $player == getPlayer())
+then
+    String cardId = $data.get("objectId").asText();
+    System.out.println("cardId is: " + cardId);
+    Card wordCard = $words.findById(cardId);
+    CardType cardType = (CardType) $keyMap.get(wordCard);
+    Grid cardGrid = wordCard.getGrid();
+    ObjectMapper objectMapper = new ObjectMapper();
+    Card agentCard = null;
+    switch (cardType) {
+        case ASSASSIN:
+            Grid assassinGrid = $board.getGrids().get(7);
+            agentCard = (Card) assassinGrid.getItemList().get(0);
+            assassinGrid.removeItem(agentCard);
+            cardGrid.addItem(agentCard);
+            $game.setTurnState(TurnState.GAME_OVER);
+            break;
+        case INNOCENT:
+            Grid innocentGrid = $board.getGrids().get(6);
+            Deck innocentDeck = (Deck) innocentGrid.getItemList().get(0);
+            agentCard = innocentDeck.draw();
+            cardGrid.addItem(agentCard);
+            $game.setTurnState(TurnState.NEW_TURN);
+            break;
+        case BLUE_AGENT:
+            Deck blueAgentDeck = $game.getBlueAgentsDeck();
+            agentCard = blueAgentDeck.draw();  // todo: if there is no card winning
+            cardGrid.addItem(agentCard);
+            if (blueAgentDeck.getCards().size() == 0) {
+                $game.setTurnState(TurnState.GAME_OVER);
+                break;
+            }
+            if ($turnColor == PlayerColor.BLUE) {
+                $game.setGuessNumber($guessNumber - 1);
+                $game.setTurnState(TurnState.OTHERS_SELECT);
+                JsonNode blueInfo = objectMapper.createObjectNode().put("message", "Number of guess is: " + $game.getGuessNumber());
+                $game.onAction(new GameMessage("Info", blueInfo));
+                System.out.println("The number of guess is: " + $game.getGuessNumber());
+            } else {
+                $game.setTurnState(TurnState.NEW_TURN);
+            }
+            break;
+        case RED_AGENT:
+            Deck redAgentDeck = $game.getRedAgentsDeck();
+            agentCard = redAgentDeck.draw();
+            cardGrid.addItem(agentCard);
+            if (redAgentDeck.getCards().size() == 0) {
+                $game.setTurnState(TurnState.GAME_OVER);
+                break;
+            }
+            if ($turnColor == PlayerColor.RED) {
+                $game.setGuessNumber($guessNumber - 1);
+                $game.setTurnState(TurnState.OTHERS_SELECT);
+                JsonNode redInfo = objectMapper.createObjectNode().put("message", "Number of guess is: " + $game.getGuessNumber());
+                $game.onAction(new GameMessage("Info", redInfo));
+            } else {
+                $game.setTurnState(TurnState.NEW_TURN);
+            }
+            break;
+    }
+    System.out.println("The card type is: " + cardType);
+    JsonNode data = objectMapper.createObjectNode().put("objectId", agentCard.getId())
+                                                   .put("gridId", cardGrid.getId());
+    $game.onAction(new GameMessage("Move", data));
+    //JsonNode info = objectMapper.createObjectNode().put("turnState", $game.getTurnState().toString());
+    //$game.onAction(new GameMessage("Info", info));
+    update ($game);
+    delete ($guessNumber);
+    insert ($game.getGuessNumber());
+    delete ($action);
+end
+
+rule "No Guess Right"
+when
+    $game: CodenamesGame( $turnColor: getTurnColor(), $keyMap: getKeyMap(), $words: getWords(), $board: getBoard() )
+    $guessNumber: Integer( $game.getGuessNumber() == 0 )
+    $player: Player( getRole() == Role.OTHERS, getColor() == $turnColor )
+    $turnState: TurnState( $game.getTurnState() == OTHERS_SELECT )
+then
+    $game.setTurnState(TurnState.NEW_TURN);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", $turnColor.toString() + "team has no guess right!");
+    $game.onAction(new GameMessage("Info", data));
+    update ($game);
+    delete ($guessNumber);
+end
+
+rule "Stop to Guess"
+when
+    $game: CodenamesGame( $turnColor: getTurnColor(), $keyMap: getKeyMap(), $words: getWords(), $board: getBoard() )
+    $guessNumber: Integer( $game.getGuessNumber() > 0 )
+    $player: Player( getRole() == Role.OTHERS, getColor() == $turnColor )
+    $action: PlayerMessage( name == "Click", $player == getPlayer() )
+then
+    System.out.println("Clicked done");
+    $game.setTurnState(TurnState.NEW_TURN);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", $turnColor.toString() + " team stopped to guess!");
+    $game.onAction(new GameMessage("Info", data));
+    update ($game);
+    delete ($guessNumber);
+    delete ($action);
+end
+
+rule "Not Your Turn"
+when
+    $game: CodenamesGame( $turnColor: getTurnColor() )
+    $player: Player( getRole() == Role.OTHERS, getColor() != $turnColor )
+    $action: PlayerMessage( name == "Select", $player == getPlayer())
+    $turnState: TurnState( $game.getTurnState() == OTHERS_SELECT )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", "It is not your turn!");
+    $player.onAction(new PlayerMessage($player, "Info", data));
+    delete ($action);
+end
+
+rule "Update the Turn Color"
+when
+    $game: CodenamesGame( $turnColor: getTurnColor(), getTurnState() == TurnState.NEW_TURN )
+then
+    if ($turnColor == PlayerColor.RED) {
+        $game.setTurnColor(PlayerColor.BLUE);
+    } else {
+        $game.setTurnColor(PlayerColor.RED);
+    }
+    $game.setTurnState(TurnState.ACTIVE_SELECTS);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = objectMapper.createObjectNode().put("message", $game.getTurnColor().toString() + "'s turn");
+    $game.onAction(new GameMessage("Info", data));
+    update ($game);
+end
+
+rule "Game Over: Announce the Winner"
+when
+    $game: CodenamesGame( getTurnState() == TurnState.GAME_OVER )
+then
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode data = null;
+    if ($game.getRedAgentsDeck().getCards().size() == 0) {
+        data = objectMapper.createObjectNode().put("message", "Winner is team " + PlayerColor.RED.toString());
+    } else if ($game.getBlueAgentsDeck().getCards().size() == 0) {
+        data = objectMapper.createObjectNode().put("message", "Winner is team " + PlayerColor.BLUE.toString());
+    } else {
+        String winnerColor = "RED";
+        if ($game.getTurnColor() == PlayerColor.RED){
+            winnerColor = "BLUE";
+        }
+        data = objectMapper.createObjectNode().put("message", "Winner is team " + winnerColor);
+    }
+    $game.onAction(new GameMessage("Info", data));
+    // TODO flip keygrid
+end
